@@ -15,6 +15,10 @@ if [ ! -x "$HOME/inference/llama-server-vl-start.sh" ]; then
   echo "Missing start script: $HOME/inference/llama-server-vl-start.sh" >&2
   exit 1
 fi
+if [ ! -x "$HOME/inference/wait-ds4-ready.sh" ]; then
+  echo "Missing wait script: $HOME/inference/wait-ds4-ready.sh" >&2
+  exit 1
+fi
 if [ ! -x "$HOME/inference/llama.cpp/build/bin/llama-server" ]; then
   echo "Missing llama-server binary" >&2
   exit 1
@@ -26,7 +30,7 @@ fi
 
 echo "=== install user unit (port 8001, large LLM stays on 8000) ==="
 mkdir -p "$HOME/.config/systemd/user"
-chmod +x "$HOME/inference/llama-server-vl-start.sh"
+chmod +x "$HOME/inference/llama-server-vl-start.sh" "$HOME/inference/wait-ds4-ready.sh"
 cp "$UNIT_SRC" "$UNIT_DST"
 systemctl --user daemon-reload
 systemctl --user enable llama-server-vl.service
