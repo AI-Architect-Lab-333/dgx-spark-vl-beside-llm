@@ -155,7 +155,7 @@ ssh <user>@100.x.y.z 'sed -i "s/\r$//" /tmp/llama-server-vl-start.sh /tmp/llama-
 
 `install-vl-systemd.sh` enables `llama-server-vl`, starts it, then checks that **`:8000` is still listening**. It never runs `systemctl … llama-server stop` / `disable`.
 
-`After=llama-server.service` only orders **process spawn**. `Type=simple` treats the LLM as started the moment `llama-server` exists — about **8 minutes before** `:8000` returns 200. An HTTP 200 is still **not** enough: Qwen-VL that starts at that instant dies in `ggml_cuda_init` / `cudaSetDevice` with `CUDA error: out of memory` even while `free -h` shows ~19 Gi **available**. On this hardware the LLM process holds **~100 469 MiB** in `nvidia-smi --query-compute-apps`. `wait-ds4-ready.sh` waits for HTTP 200 **and** that GPU allocation ≥ 90 000 MiB, stable 60 s (delta 2048 MiB). `Restart=no` — a CUDA ABRT must not loop. `TimeoutStartSec=2400` covers the LLM load plus that plateau.
+`After=llama-server.service` only orders **process spawn**. `Type=simple` treats the LLM as started the moment `llama-server` exists — about **8 minutes before** `:8000` returns 200. An HTTP 200 is still **not** enough: Qwen-VL that starts at that instant dies in `ggml_cuda_init` / `cudaSetDevice` with `CUDA error: out of memory` even while `free -h` shows ~19 Gi **available**. On this hardware the LLM process holds **~100 469 MiB** in `nvidia-smi --query-compute-apps`. `wait-ds4-ready.sh` waits for HTTP 200 **and** that GPU allocation ≥ 90 000 MiB, stable 60 s (delta 2048 MiB). This unit sets `Restart=no`: after measuring a `Restart=on-failure` loop (CUDA ABRT every few minutes that did not recover, and made the next `cudaSetDevice` worse), this install prefers a single attempt that stays `failed` if it dumps. That is an operator choice encoded in the file, not a llama.cpp requirement. `TimeoutStartSec=2400` covers the LLM load plus that plateau.
 
 Verified cold boot (power off, physical button, **zero SSH** until both APIs answered): Tailscale ~2–4 min, `:8000` 503 then **200** at ~11 min, `:8001` 503 then **200** `qwen3-vl` about **one minute later** (the 60 s plateau + ~10 s VL load). `NRestarts=0`.
 
@@ -261,7 +261,7 @@ done
 | ~11 min | `:8000=200` (`deepseek-v4-flash`) |
 | ~12 min | `:8001=200` (`qwen3-vl`) after a brief 503 |
 
-Then `systemctl --user is-active llama-server-vl` must be `active` with `Restart=no` and `NRestarts=0`. If Qwen-VL **failed** instead, it must stay **failed** — not a dump every five minutes.
+Then `systemctl --user is-active llama-server-vl` should be `active`. With the unit in this repo (`Restart=no`), a failed start stays `failed` and `NRestarts=0` — that is how this box was verified, so a dump every five minutes means the old `Restart=on-failure` policy is still loaded. If you change `Restart=` yourself, the cold-boot timing still applies; the no-loop behaviour does not.
 
 ---
 
@@ -276,7 +276,7 @@ Then `systemctl --user is-active llama-server-vl` must be `active` with `Restart
 | Cold boot maps both weight files at once | `Type=simple` does not wait for LLM 200 | `wait-ds4-ready.sh` (HTTP **and** GPU MiB plateau) |
 | `CUDA error: out of memory` in `cudaSetDevice` at first `:8000` 200 | HTTP ready ≠ CUDA settled; ~100 469 MiB already on GPU | Wait until `used_gpu_memory` ≥ 90 000 MiB stable 60 s |
 | `free -h` shows ~19 Gi available, VL still OOM | Linux available is not a second CUDA context | Trust `nvidia-smi --query-compute-apps`, not `MemAvailable` |
-| VL core-dumps every 5 min after boot | `Restart=on-failure` after ABRT | `Restart=no` + `StartLimitBurst=1` |
+| VL core-dumps every 5 min after boot | `Restart=on-failure` after CUDA ABRT | This guide’s unit uses `Restart=no` (stay `failed`); cap retries if you prefer `on-failure` |
 | `Get-Date -Is` / mangled SSH from Windows | PowerShell ate `$(…)` | scp a `.sh`, do not inline bash in PowerShell |
 | `bash^M` / unit fails closed | CRLF from Windows | `sed -i 's/\r$//'` + `.gitattributes` |
 | Test JPEG HTTP 400 | Wikimedia without a usable User-Agent | PyTorch Hub `dog.jpg` + `User-Agent` |
@@ -286,7 +286,7 @@ Then `systemctl --user is-active llama-server-vl` must be `active` with `Restart
 ## Known limitations
 
 - **8B, not 32B/235B, while the 100 GB LLM stays loaded.** That is a memory measurement, not a quality preference. Unload the LLM if you need a larger VL.
-- **Two-model cold boot is proven** with `wait-ds4-ready.sh` + `Restart=no` (August 2026 power-off / button / both `/v1/models` 200, zero SSH until then). A **curl-only** wait on the first HTTP 200, or a 180 s / first 300 s wall-clock sleep, still CUDA-OOMs. After a DGX OS / driver bump (observed: NVIDIA driver 580.173.02), a dump loop of 5 min retries did **not** recover; a single start once the LLM GPU allocation was stable did.
+- **Two-model cold boot is proven** with `wait-ds4-ready.sh` (August 2026 power-off / button / both `/v1/models` 200, zero SSH until then). A **curl-only** wait on the first HTTP 200, or a 180 s / first 300 s wall-clock sleep, still CUDA-OOMs. After a DGX OS / driver bump (observed: NVIDIA driver 580.173.02), a `Restart=on-failure` dump loop of 5 min retries did **not** recover; a single start once the LLM GPU allocation was stable did. This repo’s unit therefore uses `Restart=no`; another policy is fine if you accept or cap retries.
 - **~7 Gi headroom** with both resident. A huge image plus a long LLM decode at the same instant was not load-tested. `--parallel 1` is the margin you have.
 - **Served context is 16384**, not the model's 256K native context. Image prompts in the verification used ~1844 tokens of that budget.
 - **Instruct sampling only.** Qwen3-VL-Thinking was not downloaded or served.
