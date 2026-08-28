@@ -10,7 +10,7 @@ It covers why a **32B or 235B VL does not fit** beside a ~102 Gi LLM, why the vi
 
 ## 1. Measure what is already resident, then pick a VL that fits in the remainder
 
-This guide **does not** build llama.cpp, download the large LLM, or wire the first systemd unit. It starts from a box that already serves an OpenAI-compatible API on Tailscale `:8000` (here: DeepSeek-V4-Flash-0731 GGUF `UD-IQ3_XXS`, ~98 GB on disk, ~102 Gi in RAM, alias `deepseek-v4-flash`). Building that first service is a separate piece of work.
+This guide **does not** build llama.cpp, download the large LLM, or wire the first systemd unit. It starts from a box that already serves an OpenAI-compatible API on Tailscale `:8000` (here: DeepSeek-V4-Flash-0731 GGUF `UD-IQ3_XXS`, ~98 GB on disk, ~102 Gi in RAM, alias `deepseek-v4-flash`). Building that first service is a separate piece of work ([cross-host inference](https://github.com/AI-Architect-Lab-333/dgx-spark-cross-host-inference)).
 
 Placeholder map used below:
 
@@ -141,6 +141,8 @@ Symptom: both models load, then `free -h` shows ~7–8 Gi available and a vision
 
 Same pattern as the LLM: a **user** unit + linger (already enabled for that first service). Do not install a system-wide unit; `sudo` on this box wants an interactive password.
 
+Replace `100.x.y.z` in `llama-server-vl.service` and `llama-server-vl-start.sh` **before** copying, as in section 3: the block below installs *and* starts in one pass, with no pause to edit anything on the box. The `sed -i "s/\r$//"` is not decorative — see pitfall #7 if you are copying from Windows.
+
 ```bash
 scp llama-server-vl-start.sh llama-server-vl.service wait-ds4-ready.sh install-vl-systemd.sh <user>@100.x.y.z:/tmp/
 ssh <user>@100.x.y.z 'sed -i "s/\r$//" /tmp/llama-server-vl-start.sh /tmp/llama-server-vl.service /tmp/wait-ds4-ready.sh /tmp/install-vl-systemd.sh
@@ -149,7 +151,6 @@ ssh <user>@100.x.y.z 'sed -i "s/\r$//" /tmp/llama-server-vl-start.sh /tmp/llama-
   install -m 755 /tmp/wait-ds4-ready.sh ~/inference/wait-ds4-ready.sh
   install -m 644 /tmp/llama-server-vl.service ~/inference/llama-server-vl.service
   install -m 755 /tmp/install-vl-systemd.sh ~/inference/install-vl-systemd.sh
-  # edit ~/inference/llama-server-vl.service : replace 100.x.y.z with this box's tailnet IP
   bash ~/inference/install-vl-systemd.sh'
 ```
 
@@ -290,9 +291,8 @@ Then `systemctl --user is-active llama-server-vl` should be `active` and `NResta
 - **~7 Gi headroom** with both resident. A huge image plus a long LLM decode at the same instant was not load-tested. `--parallel 1` is the margin you have.
 - **Served context is 16384**, not the model's 256K native context. Image prompts in the verification used ~1844 tokens of that budget.
 - **Instruct sampling only.** Qwen3-VL-Thinking was not downloaded or served.
-- **No API key.** `llama-server` logs that CORS is `*` and no `--api-key` is set. The access boundary is the tailnet, same as the LLM. Add `--api-key` if the tailnet is shared with people you do not fully trust.
+- **No API key.** `llama-server` logs that CORS is `*` and no `--api-key` is set, so **any** bearer token is accepted — the header is never checked. The access boundary is the tailnet, same as the LLM. Add `--api-key` if the tailnet is shared with people you do not fully trust.
 - **Video** was not tested. The architecture supports it in llama.cpp; this session only sent a still JPEG.
-- **The bearer token is not checked** unless you pass `--api-key`.
 
 ---
 
