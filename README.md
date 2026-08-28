@@ -56,7 +56,7 @@ tailnet clients ─┬─ http://100.x.y.z:8000/v1  →  llama-server      →  
                  └─ http://100.x.y.z:8001/v1  →  llama-server-vl   →  Qwen3-VL-8B (text + image)
 ```
 
-Two processes, two ports, one `llama-server` binary (must be built with `libmtmd` — this box's `ls ~/inference/llama.cpp/build/bin/libmtmd.so*` showed it present). Both bind the **Tailscale IP only**, never `0.0.0.0`.
+Two processes, two ports, one `llama-server` binary (must be built with `libmtmd` — this box's `ls ~/inference/llama.cpp/build/bin/libmtmd.so*` showed it present). `libmtmd` is llama.cpp's multimodal library: it turns an image into embeddings through the projector and feeds them to the language model (it replaced the older `llava.cpp` path). **`mmproj`** is the vision **weight file**; **`mtmd`** is the **code**. Without `libmtmd`, `--mmproj` does nothing and `/v1/models` stays `completion`-only. Both servers bind the **Tailscale IP only**, never `0.0.0.0`.
 
 ---
 
