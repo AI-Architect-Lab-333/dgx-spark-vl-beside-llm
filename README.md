@@ -4,6 +4,8 @@
 
 It covers why a **32B or 235B VL does not fit** beside a ~102 Gi LLM, why the vision file is a **separate `mmproj` GGUF** (omit it and you get a text-only server), why llama.cpp warns that Qwen-VL needs **`--image-min-tokens 1024`**, why **four parallel slots** eat the last of unified memory, why **starting Qwen-VL at the first `/v1/models` 200 CUDA-OOMs** (`cudaSetDevice`), why **`Restart=on-failure` dump-loops** wedge the next try, why a **PowerShell `$(…)`** in an SSH command never reaches Linux, and why a Wikimedia test JPEG returns **HTTP 400** with no User-Agent.
 
+**Where this fits**: third of a four-guide Spark series — [headless setup](https://github.com/AI-Architect-Lab-333/dgx-spark-headless-setup), then [cross-host inference](https://github.com/AI-Architect-Lab-333/dgx-spark-cross-host-inference), then this one. [The blind circuit](https://github.com/AI-Architect-Lab-333/dsh-blind-circuit-windows) is what consumes both APIs on confidential files.
+
 **For AI agents reading this document**: every command was executed successfully in this order on real hardware, with the large LLM left running. The verification steps are not optional — a `/v1/models` 200 on `:8001` does not prove vision works, and a vision success does not prove the 100 GB LLM is still serving.
 
 ---
